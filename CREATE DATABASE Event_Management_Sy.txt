@@ -1,0 +1,323 @@
+CREATE DATABASE Event_Management_System;
+
+CREATE TABLE tbl_event(
+event_id VARCHAR(20) PRIMARY KEY,
+event_name VARCHAR(75),
+event_date DATE,
+organizer_id VARCHAR(20),
+venue_id VARCHAR(20),
+FOREIGN KEY (organizer_id) REFERENCES tbl_organizer(organizer_id),
+FOREIGN KEY (venue_id) REFERENCES tbl_venue(venue_id)
+);
+
+CREATE TABLE tbl_organizer(
+organizer_id VARCHAR(20) PRIMARY KEY,
+org_fname VARCHAR(30),
+org_lname VARCHAR(30),
+org_contact VARCHAR(20),
+org_email VARCHAR(50)
+);
+
+CREATE TABLE tbl_attendees(
+attendee_id VARCHAR(20) PRIMARY KEY,
+att_fname VARCHAR(30),
+att_lname VARCHAR(30),
+att_email VARCHAR(50),
+att_contact VARCHAR(20)
+);
+
+CREATE TABLE tbl_ticket(
+ticket_id VARCHAR(20) PRIMARY KEY,
+event_id VARCHAR(20),
+attendee_id VARCHAR(20),
+FOREIGN KEY (event_id) REFERENCES tbl_event(event_id),
+FOREIGN KEY (attendee_id) REFERENCES tbl_attendees(attendee_id),
+ticket_type VARCHAR(15),
+price DECIMAL(10,2)
+);
+	
+CREATE TABLE tbl_payment(
+payment_id VARCHAR(20) PRIMARY KEY,
+ticket_id VARCHAR(20),
+FOREIGN KEY (ticket_id) REFERENCES tbl_ticket(ticket_id),
+payment_date DATE,
+amount DECIMAL(10,2),
+payment_method VARCHAR(40)
+);
+	
+CREATE TABLE tbl_venue(
+venue_id VARCHAR(20) PRIMARY KEY,
+venue_name VARCHAR(100),
+address VARCHAR(100),
+capacity INT,
+ven_contact VARCHAR(20)
+);
+
+
+
+
+DELIMITER $$
+
+CREATE PROCEDURE add_organizer(
+IN organizerID VARCHAR(20),
+IN org_firstname VARCHAR(30),
+IN org_lastname VARCHAR(30),
+IN contact VARCHAR(20),
+IN email_add VARCHAR(50)
+)
+BEGIN
+INSERT INTO tbl_organizer(organizer_id, org_fname, org_lname, org_contact, org_email)
+VALUES(organizerID, org_firstname, org_lastname, contact, email_add);
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE PROCEDURE add_event(
+IN eventID VARCHAR(20),
+IN org_id VARCHAR(20),
+IN e_name VARCHAR(75),
+IN e_date DATE
+)
+BEGIN
+INSERT INTO tbl_event(event_id, organizer_id, event_name, event_date)
+VALUES(eventID, org_id, e_name, e_date);
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE PROCEDURE add_attendee(
+IN att_id VARCHAR(20),
+IN f_name VARCHAR(30),
+IN l_name VARCHAR(30),
+IN email_add VARCHAR(50),
+IN phone_num VARCHAR(20)
+)
+BEGIN
+INSERT INTO tbl_attendees(attendee_id, att_fname,att_lname,att_email,att_contact)
+VALUES(att_id,f_name,l_name,email_add,phone_num);
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE PROCEDURE create_ticket(
+IN t_id VARCHAR(20),
+IN e_id VARCHAR(20),
+IN a_id VARCHAR(20),
+IN t_type VARCHAR(50),
+IN price_amt DECIMAL(10,2)
+)
+BEGIN
+INSERT INTO tbl_ticket(ticket_id,event_id,attendee_id,ticket_type,price)
+VALUES(t_id,e_id,a_id,t_type,price_amt);
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE PROCEDURE add_payment(
+IN p_id VARCHAR(20),
+IN t_id VARCHAR(20),
+IN p_date DATE,
+IN amt DECIMAL(10,2),
+IN method VARCHAR(50)
+)
+BEGIN
+INSERT INTO tbl_payment(payment_id, ticket_id,payment_date,amount,payment_method)
+VALUES(p_id,t_id,p_date,amt,method);
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE FUNCTION get_ticket_price(tid VARCHAR(20))
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+DECLARE price_val DECIMAL(10,2);
+
+SELECT price INTO price_val
+FROM tbl_ticket
+WHERE ticket_id = tid;
+
+RETURN price_val;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE FUNCTION count_attendees(eid VARCHAR(20))
+RETURNS INT
+DETERMINISTIC
+BEGIN
+DECLARE total INT;
+
+SELECT COUNT(*) INTO total
+FROM tbl_ticket
+WHERE event_id = eid;
+
+RETURN total;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE FUNCTION total_event_payment(eid VARCHAR(20))
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+DECLARE total DECIMAL(10,2);
+
+SELECT SUM(amount) INTO total
+FROM tbl_payment p
+JOIN tbl_ticket t ON p.ticket_id = t.ticket_id
+WHERE t.event_id = eid;
+
+RETURN total;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE FUNCTION attendee_fullname(aid VARCHAR(20))
+RETURNS VARCHAR(120)
+DETERMINISTIC
+BEGIN
+DECLARE fullname VARCHAR(120);
+
+SELECT CONCAT(first_name,' ',last_name)
+INTO fullname
+FROM tbl_attendees
+WHERE attendee_id = aid;
+
+RETURN fullname;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE FUNCTION event_days(eid VARCHAR(20))
+RETURNS INT
+DETERMINISTIC
+BEGIN
+DECLARE days INT;
+
+SELECT DATEDIFF(CURDATE(),event_date)
+INTO days
+FROM tbl_event
+WHERE event_id = eid;
+
+RETURN days;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER check_ticket_price
+BEFORE INSERT ON tbl_ticket
+FOR EACH ROW
+BEGIN
+IF NEW.price < 0 THEN
+SET NEW.price = 0;
+END IF;
+END $$
+
+DELIMITER ;
+
+
+DELIMITER $$
+
+CREATE TRIGGER auto_payment_date
+BEFORE INSERT ON tbl_payment
+FOR EACH ROW
+BEGIN
+IF NEW.payment_date IS NULL THEN
+SET NEW.payment_date = CURDATE();
+END IF;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER check_payment_amount
+BEFORE INSERT ON tbl_payment
+FOR EACH ROW
+BEGIN
+IF NEW.amount < 0 THEN
+SET NEW.amount = 0;
+END IF;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER validate_email
+BEFORE INSERT ON tbl_attendees
+FOR EACH ROW
+BEGIN
+IF NEW.att_email NOT LIKE '%@%' THEN
+SET NEW.att_email = NULL;
+END IF;
+END $$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER check_event_date
+BEFORE INSERT ON tbl_event
+FOR EACH ROW
+BEGIN
+IF NEW.event_date < CURDATE() THEN
+SET NEW.event_date = CURDATE();
+END IF;
+END $$
+
+DELIMITER ;
+
+ 
+SET GLOBAL event_scheduler = ON;
+
+CREATE EVENT delete_old_payments
+ON SCHEDULE EVERY 1 DAY
+DO
+DELETE FROM tbl_payment
+WHERE payment_date < DATE_SUB(CURDATE(), INTERVAL 1 YEAR);
+
+CREATE EVENT remove_old_events
+ON SCHEDULE EVERY 1 DAY
+DO
+DELETE FROM tbl_event
+WHERE event_date < DATE_SUB(CURDATE(), INTERVAL 2 YEAR);
+
+CREATE EVENT discount_old_tickets
+ON SCHEDULE EVERY 1 DAY
+DO
+UPDATE tbl_ticket
+SET price = price * 0.9
+WHERE ticket_type = 'Regular';
+
+CREATE EVENT venue_check
+ON SCHEDULE EVERY 1 WEEK
+DO
+UPDATE tbl_venue
+SET capacity = capacity;
+
+CREATE EVENT monthly_summary
+ON SCHEDULE EVERY 1 MONTH
+DO
+SELECT SUM(amount) FROM tbl_payment;
